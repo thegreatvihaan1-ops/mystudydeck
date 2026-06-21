@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productivity Deck Companion</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f4f4f9;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        h2 { margin-top: 0; color: #4A90E2; font-size: 1.3rem; }
+        button {
+            width: 100%;
+            padding: 12px;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:active { opacity: 0.9; }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-top: 10px;
+            box-sizing: border-box;
+        }
+        .flashcard {
+            background: #fffdf0;
+            border: 2px dashed #f39c12;
+            padding: 30px 10px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 8px;
+            margin-top: 15px;
+            min-height: 60px;
+        }
+        .status { font-size: 14px; color: #777; text-align: center; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🔌 Hardware Link</h2>
+        <button style="background-color: #4A90E2;" id="connectBtn" onclick="connectBLE()">Connect to ESP32</button>
+        <div class="status" id="statusLabel">Status: Disconnected</div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Push Tasks</h2>
+        <input type="text" id="taskInput" placeholder="Type homework / chores here...">
+        <button style="background-color: #4A90E2;" onclick="sendTaskData()">Send to Console</button>
+    </div>
+
+    <div class="container">
+        <h2>🗂️ Study Flashcards</h2>
+        <div class="flashcard" id="cardDisplay">Tap Next to Start!</div>
+        <button style="background-color: #f39c12;" onclick="toggleCardSide()">👁️ Reveal Answer / Question</button>
+        <button style="background-color: #2ecc71;" onclick="advanceCard()">➡️ Next Card</button>
+    </div>
+
+    <script>
+        let deviceBLE = null;
+        let rxChar = null;
+
+        // Flashcard Bank Arrays
+        const questions = ["What is 5 x 5?", "ESP32 Tx Pin?", "Cell Powerhouse?", "Force Formula?"];
+        const answers = ["25", "GPIO 1", "Mitochondria", "F = m * a"];
+        let cardIdx = 0;
+        let viewingQuestion = true;
+
+        async function connectBLE() {
+            try {
+                document.getElementById("statusLabel").innerText = "Searching for Desk...";
+                deviceBLE = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'ESP32_Productivity_Deck' }],
+                    optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+                });
+                
+                const gattServer = await deviceBLE.gatt.connect();
+                const service = await gattServer.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+                rxChar = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+                
+                document.getElementById("statusLabel").innerText = "Connected! ✅";
+                document.getElementById("connectBtn").innerText = "Linked Successfully";
+            } catch (err) {
+                document.getElementById("statusLabel").innerText = "Connection Failed.";
+                console.error(err);
+            }
+        }
+
+        async function sendTaskData() {
+            let msg = document.getElementById("taskInput").value;
+            if (!msg) return;
+            let packet = msg + "\n"; 
+            
+            if (rxChar) {
+                let encoder = new TextEncoder();
+                await rxChar.writeValue(encoder.encode(packet));
+                document.getElementById("taskInput").value = "";
+            } else {
+                alert("Connect the hardware deck via Bluetooth first!");
+            }
+        }
+
+        function advanceCard() {
+            cardIdx = (cardIdx + 1) % questions.length;
+            viewingQuestion = true;
+            document.getElementById("cardDisplay").innerText = questions[cardIdx];
+        }
+
+        function toggleCardSide() {
+            viewingQuestion = !viewingQuestion;
+            document.getElementById("cardDisplay").innerText = viewingQuestion ? questions[cardIdx] : answers[cardIdx];
+        }
+    </script>
+</body>
+</html>
